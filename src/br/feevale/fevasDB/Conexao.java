@@ -153,7 +153,7 @@ public class Conexao {
 		if( livre ) {
 			livre = false;
 		} else {
-			throw new FevasDBException( "Conexão já em uso!" );
+			throw new FevasDBException( "Conex√£o j√° em uso!" );
 		}
 	}
 	

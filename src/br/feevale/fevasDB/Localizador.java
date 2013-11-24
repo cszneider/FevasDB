@@ -182,7 +182,7 @@ public class Localizador <T extends Object> {
 						}
 					}
 				} catch( Exception e ) {
-					System.out.println( "N‹o sei atribuir o atributo: " + f.getName() + " - " + f.getType().getSimpleName() + "/" + vlr.getClass().getSimpleName() );
+					System.out.println( "NÃ£o sei atribuir o atributo: " + f.getName() + " - " + f.getType().getSimpleName() + "/" + vlr.getClass().getSimpleName() );
 					System.out.println( f.getType() + " - " + vlr.getClass() );
 					e.printStackTrace();
 				}

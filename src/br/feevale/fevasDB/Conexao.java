@@ -85,6 +85,24 @@ public class Conexao {
 		}
 	}
 	
+	public PreparedStatement getPreparedStatement( String cmdSql, int cmd ) throws FevasDBException {
+
+		try {
+			return cnx.prepareStatement( cmdSql, cmd );
+		} catch( SQLException e ) {
+			throw new FevasDBException( e );
+		}
+	}
+	
+	public PreparedStatement getPreparedStatement( String cmdSql, String[] autoIncs ) throws FevasDBException {
+
+		try {
+			return cnx.prepareStatement( cmdSql, autoIncs );
+		} catch( SQLException e ) {
+			throw new FevasDBException( e );
+		}
+	}
+	
 	public ResultSet executaQuery( String cmdSQL ) throws FevasDBException {
 
 		try {

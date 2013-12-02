@@ -2,7 +2,12 @@ package br.feevale.fevasDB;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.math.BigDecimal;
+import java.sql.Date;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 
 public class Persistor {
@@ -14,6 +19,8 @@ public class Persistor {
 	private Object tbl;
 	private int qtRegistrosAfetados;
 	private ClasseDeNegocio cn;
+
+	private boolean showCommand = true;
 
 	public Persistor( Object tbl ) {
 		this.tbl = tbl;
@@ -41,6 +48,7 @@ public class Persistor {
 	
 			Field[] campos = tbl.getClass().getDeclaredFields();
 			Object[] vlrs = new Object[ campos.length ];
+			ArrayList<Object[]> autoIncrements = null;
 			int nrPrms = 0;
 	
 			for( Field campo : campos ) {
@@ -55,6 +63,12 @@ public class Persistor {
 					prm.append( ", " );
 	
 					vlrs[ nrPrms++ ] = vlr;
+				} else {
+					if( autoIncrements == null ) {
+						autoIncrements = new ArrayList<Object[]>();
+					}
+					
+					autoIncrements.add( new Object[] { campo.getName(), campo.getType() } );
 				}
 			}
 	
@@ -64,11 +78,20 @@ public class Persistor {
 			cmd.delete( cmd.length() - 2, cmd.length() );
 			cmd.append( " );" );
 	
-			System.out.println( cmd.toString() );
+			if( showCommand ) System.out.println( cmd.toString() );
+			String[] autoInc = null;
+			
+			if( autoIncrements != null ) {
+				autoInc = new String[ autoIncrements.size() ];
+				
+				int k = 0;
+				for( Object[] autoField : autoIncrements ) {
+					autoInc[ k++ ] = autoField[ 0 ].toString().toLowerCase();
+				}
+			}
 
-			PreparedStatement ps = cnx.getPreparedStatement( cmd.toString() );
-
-			System.out.println( ps );
+			PreparedStatement ps = cnx.getPreparedStatement( cmd.toString(), autoInc );
+			
 			try {
 
 				int i = 1;
@@ -80,18 +103,57 @@ public class Persistor {
 					}
 				}
 
-				System.out.println( ps.toString() );
+				if( showCommand ) System.out.println( ps.toString() );
 
 				ps.execute();
+				
+				if( autoIncrements != null ) {
+					recuperaCamposAutoIncrementados( ps.getGeneratedKeys(), autoIncrements );
+				}
 
 				executaRegrasDepois( INSERIR, cnx );
 			} finally {
 				cnx.libera();
 			}
-			
-			// ps.getGeneratedKeys(); estudar
 		} catch( Exception e ) {
 			throw new FevasDBException( e );
+		}
+	}
+
+	private void recuperaCamposAutoIncrementados( ResultSet rs, ArrayList<Object[]> autoIncrements ) throws SQLException {
+
+		if( rs.next() ) {
+			
+			int indColuna = 1;
+			for( Object[] autoInfo : autoIncrements ) {
+
+				String field = (String) autoInfo[ 0 ];
+				Class<?> tipo = (Class<?>) autoInfo[ 1 ];
+				
+				String nomeMetodoSet = "set" + Character.toUpperCase( field.charAt( 0 ) ) + field.substring( 1 );
+				Object vlr = rs.getObject( indColuna++ );
+				
+				if( vlr != null ) {
+					
+					try {
+						Method mtd = tbl.getClass().getDeclaredMethod( nomeMetodoSet, tipo );
+						
+						try {
+							mtd.invoke( tbl, vlr );
+						} catch( Exception e ) {
+							if( vlr.getClass().getSimpleName().equals( "BigDecimal" ) ) {
+								mtd.invoke( tbl, ((BigDecimal) vlr).doubleValue() ); 
+							} else if( vlr.getClass().getSimpleName().equals( "Timestamp" ) && tipo.getSimpleName().equals( "Date" ) ) {
+								mtd.invoke( tbl, new Date( ((Timestamp) vlr).getTime() ) );
+							}
+						}
+					} catch( Exception e ) {
+						System.out.println( "Não sei atribuir o atributo: " + field + " - " + tipo.getSimpleName() + "/" + vlr.getClass().getSimpleName() );
+						System.out.println( tipo + " - " + vlr.getClass() );
+						e.printStackTrace();
+					}
+				}
+			}
 		}
 	}
 
@@ -158,7 +220,7 @@ public class Persistor {
 					}
 				}
 
-				System.out.println( ps.toString() );
+				if( showCommand ) System.out.println( ps.toString() );
 				qtRegistrosAfetados = ps.executeUpdate();
 
 				executaRegrasDepois( EXCLUIR, cnx );
@@ -222,7 +284,7 @@ public class Persistor {
 			cmd.append( " WHERE " );
 			cmd.append( prm );
 	
-			System.out.println( cmd.toString() );
+			if( showCommand ) System.out.println( cmd.toString() );
 
 			PreparedStatement ps = cnx.getPreparedStatement( cmd.toString() );
 
@@ -241,7 +303,7 @@ public class Persistor {
 					}
 				}
 
-				System.out.println( ps.toString() );
+				if( showCommand ) System.out.println( ps.toString() );
 				qtRegistrosAfetados = ps.executeUpdate();
 
 				executaRegrasDepois( ALTERAR, cnx );
@@ -260,7 +322,6 @@ public class Persistor {
 	private void executaRegrasAntes( int tipoOperacao, Conexao cnx ) throws FevasDBException {
 
 		String nome = tbl.getClass().getName() + "Negocio";
-		System.err.println( "" + nome );
 
 		try {
 			Class<?> c = Class.forName( nome );
